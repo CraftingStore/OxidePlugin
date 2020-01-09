@@ -8,8 +8,8 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("CraftingStore", "CraftingStore.net", "0.1")]
-    [Description("Handle CraftingStore commands")]
+    [Info("CraftingStore", "CraftingStore", "0.1.1")]
+    [Description("Checks the CraftingStore donation platform for new payments and executes the commands that have been set.")]
 
     class CraftingStore : RustPlugin
     {
@@ -17,28 +17,33 @@ namespace Oxide.Plugins
 
         private string apiToken = "";
 
-        private bool pluginEnabled = true;
-
         void Loaded()
         {
-            // Set token
+            // Set config
             this.apiToken = Config["token"].ToString();
+            int fetchFrequencyMinutes = Int32.Parse(Config["frequencyMinutes"].ToString());
 
-            if (this.apiToken == "Enter your API token") {
-                Puts("Your API token is not yet set, please set the API token in the config and reload the CraftingStore plugin.");
-                this.pluginEnabled = false;
+            if (this.apiToken == "Enter your API token") 
+			{
+                PrintError("Your API token is not yet set, please set the API token in the config and reload the CraftingStore plugin.");
+                return;
             }
 
-            if (this.pluginEnabled) {
-                // Request commands on load
+            if (fetchFrequencyMinutes < 4) 
+			{
+                // Set to 5 minutes when the frequency is to 4 or lower.
+                PrintError("The fetch frequency was set below the minimum (5 minutes). Please change this value in the config, CraftingStore will still work and fetch the commands every 5 minutes.");
+                fetchFrequencyMinutes = 5;
+            }
+			
+            // Request commands on load
+            RequestCommands();
+
+            // Create timer that will execute the commands
+            timer.Repeat(fetchFrequencyMinutes * 60, 0, () => 
+			{
                 RequestCommands();
-
-                // Request commands
-                timer.Repeat(240, 0, () =>
-                {
-                    RequestCommands();
-                });
-            }
+            });
         }
 
         protected override void LoadDefaultConfig()
@@ -46,6 +51,7 @@ namespace Oxide.Plugins
             Puts("Creating CraftingStore Config");
             Config.Clear();
             Config["token"] = "Enter your API token";
+            Config["frequencyMinutes"] = 5;
 
             SaveConfig();
         }
@@ -67,9 +73,9 @@ namespace Oxide.Plugins
 
         private void GetCallback(int code, string response, string action)
         {
-            if (response == null || code != 200)
-            {
-                Puts("Got error: Invalid response returned, please contact us if this error persists.");
+            if (response == null || code != 200) 
+			{
+                PrintError("Invalid response returned, please contact us if this error persists.");
                 return;
             }
 
@@ -77,14 +83,17 @@ namespace Oxide.Plugins
             ApiResponse parsedResponse = ParseResponse(response);
 
             // Validate that the request got a success response back, if not, return the message.
-            if (!parsedResponse.getSuccess()) {
-                Puts("Got Error: " + parsedResponse.getMessage());
+            if (!parsedResponse.success) 
+			{
+                PrintError("Did not receive success status: " + parsedResponse.message);
                 return;
             }
 
 
-            if (action == "queue") {
+            if (action == "queue") 
+			{
                 this.ProcessQueuedCommands(parsedResponse);
+				return;
             }
         }
 
@@ -99,9 +108,9 @@ namespace Oxide.Plugins
 
         private void PostCallback(int code, string response, string action)
         {
-            if (response == null || code != 200)
-            {
-                Puts("Got error: Invalid response returned, please contact us if this error persists.");
+            if (response == null || code != 200) 
+			{
+                PrintError("Got error: Invalid response returned, please contact us if this error persists.");
                 return;
             }
 
@@ -109,8 +118,9 @@ namespace Oxide.Plugins
             ApiResponse parsedResponse = ParseResponse(response);
 
             // Validate that the request got a success response back, if not, return the message.
-            if (!parsedResponse.getSuccess()) {
-                Puts("Got Error: " + parsedResponse.getMessage());
+            if (!parsedResponse.success) 
+			{
+                PrintError("Did not receive success status: " + parsedResponse.message);
                 return;
             }
         }
@@ -124,14 +134,15 @@ namespace Oxide.Plugins
             foreach (QueueResponse donation in donations)
             {
                 // Add donation to executed list.
-                ids.Add(donation.getId());
+                ids.Add(donation.id);
 
                 // Execute commands
-                Puts("Executing Command: " + donation.getCommand());
-                rust.RunServerCommand(donation.getCommand());
+                Puts("Executing Command: " + donation.command);
+                rust.RunServerCommand(donation.command);
             }
 
-            if (ids.Count > 0) {
+            if (ids.Count > 0) 
+			{
                 // Mark as complete if there are commands processed
                 string serializedIds = JsonConvert.SerializeObject(ids);
 
@@ -146,61 +157,22 @@ namespace Oxide.Plugins
             GetRequest("queue", "queue");
         }
         
-        public class QueueResponse {
+        public class QueueResponse 
+		{
 
             public int id;
             public string command;
             public string packageName;
-
-            public int getId()
-            {
-                return this.id;
-            }
-
-            public string getCommand()
-            {
-                return this.command;
-            }
-
-            public string getPackageName()
-            {
-                return this.packageName;
-            }
         }
 
-        public class ApiResponse {
+        public class ApiResponse 
+		{
 
             public int id;
             public bool success;
             public string error;
             public string message;
             public QueueResponse[] result;
-
-            public int getId()
-            {
-                return this.id;
-            }
-
-            public bool getSuccess()
-            {
-                return this.success;
-            }
-
-            public string getError()
-            {
-                return this.error;
-            }
-
-            public string getMessage()
-            {
-                return this.message;
-            }
-
-            public QueueResponse[] getResult()
-            {
-                return this.result;
-            }
         }
-
     }
 }
