@@ -8,16 +8,16 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("CraftingStore", "CraftingStore", "0.1.1")]
+    [Info("CraftingStore", "Tim_kwakman", "0.1.1")]
     [Description("Checks the CraftingStore donation platform for new payments and executes the commands that have been set.")]
 
     class CraftingStore : RustPlugin
     {
-        private string baseUrl = "https://api.craftingstore.net/v4/";
+        private const string baseUrl = "https://api.craftingstore.net/v4/";
 
         private string apiToken = "";
 
-        void Loaded()
+        void OnServerInitialized()
         {
             // Set config
             this.apiToken = Config["token"].ToString();
@@ -49,11 +49,9 @@ namespace Oxide.Plugins
         protected override void LoadDefaultConfig()
         {
             Puts("Creating CraftingStore Config");
-            Config.Clear();
+	    
             Config["token"] = "Enter your API token";
             Config["frequencyMinutes"] = 5;
-
-            SaveConfig();
         }
 
         private ApiResponse ParseResponse(string response)
@@ -67,7 +65,7 @@ namespace Oxide.Plugins
             // Set the authentication header
             Dictionary<string, string> headers = new Dictionary<string, string> { { "token", this.apiToken } };
 
-            webrequest.Enqueue(this.baseUrl + uri, null, (code, response) =>
+            webrequest.Enqueue(baseUrl + uri, null, (code, response) =>
                 GetCallback(code, response, action), this, Core.Libraries.RequestMethod.GET, headers);
         }
 
@@ -102,7 +100,7 @@ namespace Oxide.Plugins
             // Set the authentication header
             Dictionary<string, string> headers = new Dictionary<string, string> { { "token", this.apiToken } };
 
-            webrequest.Enqueue(this.baseUrl + uri, payload, (code, response) =>
+            webrequest.Enqueue(baseUrl + uri, payload, (code, response) =>
                 PostCallback(code, response, action), this, Core.Libraries.RequestMethod.POST, headers);
         }
 
@@ -159,7 +157,6 @@ namespace Oxide.Plugins
         
         public class QueueResponse 
 		{
-
             public int id;
             public string command;
             public string packageName;
@@ -167,7 +164,6 @@ namespace Oxide.Plugins
 
         public class ApiResponse 
 		{
-
             public int id;
             public bool success;
             public string error;
