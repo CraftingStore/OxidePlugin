@@ -8,7 +8,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("CraftingStore", "Tim_kwakman", "0.1.1")]
+    [Info("Crafting Store", "Tim_kwakman", "0.1.2")]
     [Description("Checks the CraftingStore donation platform for new payments and executes the commands that have been set.")]
 
     class CraftingStore : RustPlugin
