@@ -8,12 +8,14 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Crafting Store", "Tim_kwakman", "0.1.2")]
+    [Info("Crafting Store", "CraftingStore", "0.1.5")]
     [Description("Checks the CraftingStore donation platform for new payments and executes the commands that have been set.")]
 
-    class CraftingStore : RustPlugin
+    class CraftingStore : CovalencePlugin
     {
-        private const string baseUrl = "https://api.craftingstore.net/v4/";
+        private string baseUrl = "https://api.craftingstore.net/v4/";
+        private string baseUrlAlternative = "https://api-fallback.craftingstore.net/v4/";
+	private bool useAlternativeBaseUrl = false;
 
         private string apiToken = "";
 
@@ -24,13 +26,13 @@ namespace Oxide.Plugins
             int fetchFrequencyMinutes = Int32.Parse(Config["frequencyMinutes"].ToString());
 
             if (this.apiToken == "Enter your API token") 
-			{
+	    {
                 PrintError("Your API token is not yet set, please set the API token in the config and reload the CraftingStore plugin.");
                 return;
             }
 
             if (fetchFrequencyMinutes < 4) 
-			{
+	    {
                 // Set to 5 minutes when the frequency is to 4 or lower.
                 PrintError("The fetch frequency was set below the minimum (5 minutes). Please change this value in the config, CraftingStore will still work and fetch the commands every 5 minutes.");
                 fetchFrequencyMinutes = 5;
@@ -41,7 +43,7 @@ namespace Oxide.Plugins
 
             // Create timer that will execute the commands
             timer.Repeat(fetchFrequencyMinutes * 60, 0, () => 
-			{
+	    {
                 RequestCommands();
             });
         }
@@ -65,15 +67,22 @@ namespace Oxide.Plugins
             // Set the authentication header
             Dictionary<string, string> headers = new Dictionary<string, string> { { "token", this.apiToken } };
 
-            webrequest.Enqueue(baseUrl + uri, null, (code, response) =>
-                GetCallback(code, response, action), this, Core.Libraries.RequestMethod.GET, headers);
+            webrequest.Enqueue(getBaseUrl() + uri, null, (code, response) =>
+            GetCallback(code, response, action), this, Core.Libraries.RequestMethod.GET, headers);
         }
 
         private void GetCallback(int code, string response, string action)
         {
-            if (response == null || code != 200) 
-			{
+            if (response == null || code != 200) {
+                if (this.useAlternativeBaseUrl == false)
+		{
+                    // Some installations cannot work with our TLS/SSL certificate, use our alternative endpoint.
+                    this.useAlternativeBaseUrl = true;
+                    RequestCommands();
+                    return;
+                }
                 PrintError("Invalid response returned, please contact us if this error persists.");
+		PrintError(response);
                 return;
             }
 
@@ -82,16 +91,15 @@ namespace Oxide.Plugins
 
             // Validate that the request got a success response back, if not, return the message.
             if (!parsedResponse.success) 
-			{
+	    {
                 PrintError("Did not receive success status: " + parsedResponse.message);
                 return;
             }
 
-
             if (action == "queue") 
-			{
+	    {
                 this.ProcessQueuedCommands(parsedResponse);
-				return;
+		return;
             }
         }
 
@@ -100,14 +108,14 @@ namespace Oxide.Plugins
             // Set the authentication header
             Dictionary<string, string> headers = new Dictionary<string, string> { { "token", this.apiToken } };
 
-            webrequest.Enqueue(baseUrl + uri, payload, (code, response) =>
-                PostCallback(code, response, action), this, Core.Libraries.RequestMethod.POST, headers);
+            webrequest.Enqueue(getBaseUrl() + uri, payload, (code, response) =>
+            PostCallback(code, response, action), this, Core.Libraries.RequestMethod.POST, headers);
         }
 
         private void PostCallback(int code, string response, string action)
         {
             if (response == null || code != 200) 
-			{
+	    {
                 PrintError("Got error: Invalid response returned, please contact us if this error persists.");
                 return;
             }
@@ -117,7 +125,7 @@ namespace Oxide.Plugins
 
             // Validate that the request got a success response back, if not, return the message.
             if (!parsedResponse.success) 
-			{
+	    {
                 PrintError("Did not receive success status: " + parsedResponse.message);
                 return;
             }
@@ -136,11 +144,11 @@ namespace Oxide.Plugins
 
                 // Execute commands
                 Puts("Executing Command: " + donation.command);
-                rust.RunServerCommand(donation.command);
+				server.Command(donation.command);
             }
 
             if (ids.Count > 0) 
-			{
+	    {
                 // Mark as complete if there are commands processed
                 string serializedIds = JsonConvert.SerializeObject(ids);
 
@@ -150,20 +158,25 @@ namespace Oxide.Plugins
             }
         }
 
+        private string getBaseUrl()
+        {
+            return this.useAlternativeBaseUrl ? this.baseUrlAlternative : this.baseUrl;
+        }
+
         private void RequestCommands()
         {
             GetRequest("queue", "queue");
         }
         
         public class QueueResponse 
-		{
+	{
             public int id;
             public string command;
             public string packageName;
         }
 
         public class ApiResponse 
-		{
+	{
             public int id;
             public bool success;
             public string error;
